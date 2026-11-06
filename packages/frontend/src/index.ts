@@ -3,8 +3,10 @@ import PrimeVue from "primevue/config";
 import type { ParseSource } from "shared";
 import { createApp } from "vue";
 
+import { Icons } from "./icons";
 import { SDKPlugin } from "./plugins/sdk";
 import { parseWsdl } from "./services/parse";
+import { initHeaders } from "./stores/headers";
 import "./styles/index.css";
 import type { FrontendSDK } from "./types";
 import App from "./views/App.vue";
@@ -45,6 +47,7 @@ function sourceFromContext(context: Context): ParseSource | undefined {
 }
 
 export const init = (sdk: FrontendSDK) => {
+  initHeaders(sdk);
   const app = createApp(App);
   app.use(PrimeVue, { unstyled: true, pt: Classic });
   app.use(SDKPlugin, sdk);
@@ -58,7 +61,7 @@ export const init = (sdk: FrontendSDK) => {
   let onPage = false;
 
   const sidebarItem = sdk.sidebar.registerItem("Wsdler", PAGE, {
-    icon: "fas fa-file-code",
+    icon: Icons.wsdler,
   });
 
   sdk.navigation.addPage(PAGE, {
@@ -113,16 +116,16 @@ export const init = (sdk: FrontendSDK) => {
   sdk.menu.registerItem({
     type: "RequestRow",
     commandId: PARSE_COMMAND,
-    leadingIcon: "fas fa-file-code",
+    leadingIcon: Icons.wsdler,
   });
   sdk.menu.registerItem({
     type: "Request",
     commandId: PARSE_COMMAND,
-    leadingIcon: "fas fa-file-code",
+    leadingIcon: Icons.wsdler,
   });
   sdk.menu.registerItem({
     type: "Response",
     commandId: PARSE_COMMAND,
-    leadingIcon: "fas fa-file-code",
+    leadingIcon: Icons.wsdler,
   });
 };

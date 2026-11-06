@@ -5,7 +5,7 @@ export default [
   ...defaultConfig(),
   {
     settings: {
-      polyfills: ["URL"],
+      polyfills: ["URL", "ResizeObserver", "Promise.all"],
     },
   },
 ];

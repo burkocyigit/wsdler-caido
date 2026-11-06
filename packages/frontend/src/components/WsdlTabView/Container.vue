@@ -1,21 +1,20 @@
 <script setup lang="ts">
+import { type EditorView } from "@codemirror/view";
 import Button from "primevue/button";
 import Column from "primevue/column";
 import ContextMenu from "primevue/contextmenu";
 import DataTable from "primevue/datatable";
+import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import Splitter from "primevue/splitter";
 import SplitterPanel from "primevue/splitterpanel";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import { Icons } from "@/icons";
 import { useSDK } from "@/plugins/sdk";
 import { sendAllToReplay, sendToAutomate, sendToReplay } from "@/services/send";
-import {
-  type ConnectionMode,
-  useWsdlerStore,
-  type WsdlEntry,
-  type WsdlTab,
-} from "@/stores/wsdler";
+import { useHeadersStore } from "@/stores/headers";
+import { useWsdlerStore, type WsdlEntry, type WsdlTab } from "@/stores/wsdler";
 
 const { tab } = defineProps<{ tab: WsdlTab }>();
 
@@ -23,9 +22,9 @@ const sdk = useSDK();
 const store = useWsdlerStore();
 
 const editorHost = ref<HTMLDivElement>();
-const editor = sdk.ui.httpRequestEditor();
-const view = editor.getEditorView();
+let view: EditorView | undefined;
 let displayedId: string | undefined;
+let resizeObserver: ResizeObserver | undefined;
 
 const selected = computed({
   get: () => tab.entries.find((e) => e.id === tab.selectedId),
@@ -36,9 +35,12 @@ const selected = computed({
   },
 });
 
-const editorText = () => view.state.doc.toString();
+const editorText = () => view?.state.doc.toString() ?? "";
 
 const setEditorText = (text: string) => {
+  if (view === undefined || view.state.doc.toString() === text) {
+    return;
+  }
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
   });
@@ -46,7 +48,7 @@ const setEditorText = (text: string) => {
 
 const saveEditor = () => {
   const previous = tab.entries.find((e) => e.id === displayedId);
-  if (previous !== undefined) {
+  if (previous !== undefined && view !== undefined) {
     previous.request = editorText();
   }
 };
@@ -57,15 +59,74 @@ const showEntry = (entry: WsdlEntry | undefined) => {
   setEditorText(entry?.request ?? "");
 };
 
+const mountEditor = () => {
+  const host = editorHost.value;
+  if (host === undefined || !host.isConnected) {
+    return;
+  }
+  saveEditor();
+  host.replaceChildren();
+  const editor = sdk.ui.httpRequestEditor();
+  host.appendChild(editor.getElement());
+  view = editor.getEditorView();
+  displayedId = selected.value?.id;
+  setEditorText(selected.value?.request ?? "");
+};
+
+const SAVE_EVENTS = ["input", "keyup", "paste", "cut", "drop", "focusout"];
+
+let hostVisible = false;
+
+const onHostResize = () => {
+  const host = editorHost.value;
+  const visible =
+    host !== undefined &&
+    host.isConnected &&
+    host.getBoundingClientRect().height > 0;
+  if (visible && !hostVisible) {
+    mountEditor();
+  } else if (!visible && hostVisible) {
+    saveEditor();
+  } else if (visible) {
+    view?.requestMeasure();
+  }
+  hostVisible = visible;
+};
+
 onMounted(() => {
-  editorHost.value?.appendChild(editor.getElement());
-  showEntry(selected.value);
+  const host = editorHost.value;
+  if (host === undefined) {
+    return;
+  }
+  for (const name of SAVE_EVENTS) {
+    host.addEventListener(name, saveEditor);
+  }
+  resizeObserver = new ResizeObserver(onHostResize);
+  resizeObserver.observe(host);
+});
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  saveEditor();
+  view = undefined;
 });
 
 watch(
   () => tab.selectedId,
   () => showEntry(selected.value),
 );
+
+const headerStore = useHeadersStore();
+const headerSnapshot = computed(() => ({
+  names: headerStore.allNames.value,
+  active: headerStore.activeHeaders.value,
+}));
+
+watch(headerSnapshot, (next, previous) => {
+  saveEditor();
+  store.applyHeaderChange(tab, [...previous.names, ...next.names], next.active);
+  setEditorText(selected.value?.request ?? "");
+});
 
 const rawFor = (entry: WsdlEntry) =>
   entry.id === displayedId ? editorText() : entry.request;
@@ -128,12 +189,12 @@ const menuItems = computed(() => {
   return [
     {
       label: "Send to Replay",
-      icon: "fas fa-rotate",
+      icon: Icons.replay,
       command: () => replay(entry),
     },
     {
       label: "Send to Automate",
-      icon: "fas fa-wand-magic-sparkles",
+      icon: Icons.automate,
       command: () => automate(entry),
     },
     { label: "Copy request", icon: "fas fa-copy", command: () => copy(entry) },
@@ -150,13 +211,12 @@ const onRowContextMenu = (event: { originalEvent: Event; data: WsdlEntry }) => {
   menu.value?.show(event.originalEvent);
 };
 
-const onConnectionModeChange = (mode: ConnectionMode) =>
-  store.setConnectionMode(tab, mode);
-
-const connectionOptions = [
-  { label: "Original request host", value: "original" },
-  { label: "WSDL endpoint host", value: "endpoint" },
-];
+const onEndpointInput = (entry: WsdlEntry, event: Event) => {
+  const value = (event.target as HTMLInputElement).value.trim();
+  if (value !== entry.endpoint) {
+    onEndpointChange(entry, value);
+  }
+};
 </script>
 
 <template>
@@ -179,25 +239,16 @@ const connectionOptions = [
         {{ tab.warnings.length }} warning(s)
       </span>
       <div class="flex-1" />
-      <span class="text-sm text-surface-400">Connect to</span>
-      <Select
-        :model-value="tab.connectionMode"
-        :options="connectionOptions"
-        option-label="label"
-        option-value="value"
-        size="small"
-        @update:model-value="onConnectionModeChange"
-      />
       <Button
         label="Send to Replay"
-        icon="fas fa-rotate"
+        :icon="Icons.replay"
         size="small"
         :disabled="selected === undefined"
         @click="selected && replay(selected)"
       />
       <Button
         label="Send to Automate"
-        icon="fas fa-wand-magic-sparkles"
+        :icon="Icons.automate"
         size="small"
         severity="secondary"
         :disabled="selected === undefined"
@@ -235,12 +286,22 @@ const connectionOptions = [
                 v-if="data.endpoints.length > 1"
                 :model-value="data.endpoint"
                 :options="data.endpoints"
+                editable
                 size="small"
                 class="w-full"
                 @update:model-value="onEndpointChange(data, $event)"
                 @click.stop
               />
-              <span v-else>{{ data.endpoint }}</span>
+              <InputText
+                v-else
+                :model-value="data.endpoint"
+                placeholder="http://host/path"
+                size="small"
+                class="w-full"
+                @change="onEndpointInput(data, $event)"
+                @keydown.enter="onEndpointInput(data, $event)"
+                @click.stop
+              />
             </template>
           </Column>
         </DataTable>
@@ -248,7 +309,10 @@ const connectionOptions = [
       </SplitterPanel>
       <SplitterPanel :size="70" :min-size="20" class="min-h-0 flex flex-col">
         <div class="px-2 py-1 text-sm font-semibold">Request</div>
-        <div ref="editorHost" class="flex-1 min-h-0 overflow-hidden" />
+        <div
+          ref="editorHost"
+          class="flex-1 min-h-0 flex flex-col overflow-hidden [&>*]:flex-1 [&>*]:min-h-0 [&>*]:overflow-hidden"
+        />
       </SplitterPanel>
     </Splitter>
   </div>

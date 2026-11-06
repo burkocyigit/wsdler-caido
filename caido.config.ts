@@ -12,7 +12,7 @@ export default defineConfig({
   id,
   name: "Wsdler",
   description: "WSDL parser: right-click a WSDL request, select Parse WSDL and get ready-to-send SOAP requests for every operation (port of NetSPI Wsdler for Burp)",
-  version: "1.0.0",
+  version: "1.1.0",
   author: {
     name: "burkocyigit",
     email: "brkkcygt32@gmail.com",

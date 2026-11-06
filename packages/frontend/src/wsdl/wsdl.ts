@@ -14,7 +14,7 @@ import {
   xsdChildren,
 } from "./xml";
 
-type Fetcher = (url: string) => Promise<string>;
+export type Fetcher = (url: string) => Promise<string>;
 
 type Part = {
   name: string;

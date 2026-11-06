@@ -1,7 +1,8 @@
 import type { HttpTarget } from "shared";
 import { computed, reactive, ref } from "vue";
 
-import { buildSoapRequest } from "@/wsdl/request";
+import { useHeadersStore } from "@/stores/headers";
+import { applyCustomHeaders, buildSoapRequest } from "@/wsdl/request";
 
 export type WsdlEntry = {
   id: string;
@@ -15,17 +16,14 @@ export type WsdlEntry = {
   request: string;
 };
 
-export type ConnectionMode = "original" | "endpoint";
-
 export type WsdlTab = {
   id: string;
   name: string;
   url: string;
   baseRequest: string;
-  originalTarget: HttpTarget;
+  originalTarget: HttpTarget | undefined;
   entries: WsdlEntry[];
   warnings: string[];
-  connectionMode: ConnectionMode;
   selectedId: string | undefined;
 };
 
@@ -35,28 +33,40 @@ const nextId = () => `${Date.now().toString(36)}-${(counter++).toString(36)}`;
 const tabs = ref<WsdlTab[]>([]);
 const activeTabId = ref<string | undefined>(undefined);
 
+const buildRequest = (
+  baseRequest: string,
+  endpoint: string,
+  soapAction: string,
+  envelope: string,
+) =>
+  applyCustomHeaders(
+    buildSoapRequest(baseRequest, endpoint, soapAction, envelope),
+    [],
+    useHeadersStore().activeHeaders.value,
+  );
+
 export function useWsdlerStore() {
   const activeTab = computed(() =>
     tabs.value.find((t) => t.id === activeTabId.value),
   );
 
   const addTab = (
-    tab: Omit<WsdlTab, "id" | "selectedId" | "connectionMode" | "entries"> & {
+    tab: Omit<WsdlTab, "id" | "selectedId" | "entries"> & {
       entries: Omit<WsdlEntry, "id" | "request" | "endpoint">[];
     },
   ) => {
     const created: WsdlTab = reactive({
       ...tab,
       id: nextId(),
-      connectionMode: "original",
       selectedId: undefined,
       entries: tab.entries.map((e) => {
-        const endpoint = e.endpoints[0] ?? tab.url;
+        const endpoint =
+          e.endpoints[0] ?? (tab.originalTarget === undefined ? "" : tab.url);
         return {
           ...e,
           id: nextId(),
           endpoint,
-          request: buildSoapRequest(
+          request: buildRequest(
             tab.baseRequest,
             endpoint,
             e.soapAction,
@@ -85,7 +95,7 @@ export function useWsdlerStore() {
 
   const setEndpoint = (tab: WsdlTab, entry: WsdlEntry, endpoint: string) => {
     entry.endpoint = endpoint;
-    entry.request = buildSoapRequest(
+    entry.request = buildRequest(
       tab.baseRequest,
       endpoint,
       entry.soapAction,
@@ -97,8 +107,14 @@ export function useWsdlerStore() {
     tab.selectedId = entryId;
   };
 
-  const setConnectionMode = (tab: WsdlTab, mode: ConnectionMode) => {
-    tab.connectionMode = mode;
+  const applyHeaderChange = (
+    tab: WsdlTab,
+    managedNames: string[],
+    active: { name: string; value: string }[],
+  ) => {
+    for (const entry of tab.entries) {
+      entry.request = applyCustomHeaders(entry.request, managedNames, active);
+    }
   };
 
   return {
@@ -109,6 +125,6 @@ export function useWsdlerStore() {
     closeTab,
     setEndpoint,
     select,
-    setConnectionMode,
+    applyHeaderChange,
   };
 }

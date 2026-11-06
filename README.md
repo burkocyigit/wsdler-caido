@@ -12,6 +12,8 @@ Install **Wsdler** from Caido's **Plugins → Community Store**, or download `pl
 2. The **Wsdler** page in the sidebar gets a new tab named after the service. It lists every SOAP operation with its **Operation**, **Binding** and **Endpoint**.
 3. Click a row to see the generated SOAP request. You can edit it, then use **Send to Replay** or **Send to Automate**, or right-click the row for more actions.
 
+You can also load a WSDL from disk with **Import WSDL file**. If the WSDL references local XSD files, select them together with the WSDL.
+
 ## Behaviour carried over from Wsdler
 
 - The WSDL is fetched again from its URL with the original request's headers (cookies, auth). Imported WSDLs and XSDs (`wsdl:import`, `xs:import`, `xs:include`, `xs:redefine`) are fetched the same way.
@@ -22,8 +24,9 @@ Install **Wsdler** from Caido's **Plugins → Community Store**, or download `pl
 
 ## Additions
 
-- **Connect to**: chooses where requests are sent. *Original request host* is the default and matches Burp. *WSDL endpoint host* sends to the `soap:address` host.
-- An Endpoint dropdown appears when a binding has more than one address.
+- **Custom headers**: add headers such as `client_secret: …` and switch each one on or off with its checkbox. Enabled headers are added to every generated request and to WSDL/XSD fetches. The list is saved in Caido.
+- **Import WSDL file**: parse a local WSDL (for example a WCF `?singleWsdl` export) without a request in Caido.
+- **Editable Endpoint**: requests are sent to the host in the Endpoint cell. Change it to point at another host; when a binding has several addresses, pick one from the list.
 - **Send all to Replay** creates a Replay collection holding every operation.
 - The sidebar shows a counter for newly parsed WSDLs. In Burp, the tab flashed orange instead.
 

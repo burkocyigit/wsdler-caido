@@ -1,21 +1,20 @@
 import type { HttpTarget } from "shared";
 
-import type { ConnectionMode, WsdlEntry, WsdlTab } from "@/stores/wsdler";
+import type { WsdlEntry, WsdlTab } from "@/stores/wsdler";
 import type { FrontendSDK } from "@/types";
 import { endpointParts } from "@/wsdl/request";
 
-function connectionFor(
-  tab: WsdlTab,
-  entry: WsdlEntry,
-  mode: ConnectionMode = tab.connectionMode,
-): HttpTarget {
-  if (mode === "endpoint") {
-    const parts = endpointParts(entry.endpoint);
-    if (parts !== undefined) {
-      return parts.target;
-    }
+function connectionFor(tab: WsdlTab, entry: WsdlEntry): HttpTarget {
+  const parts = endpointParts(entry.endpoint);
+  if (parts !== undefined) {
+    return parts.target;
   }
-  return tab.originalTarget;
+  if (tab.originalTarget !== undefined) {
+    return tab.originalTarget;
+  }
+  throw new Error(
+    `${entry.operationName} has no valid endpoint URL; set one before sending`,
+  );
 }
 
 const toBase64 = (s: string) => {

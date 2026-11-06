@@ -69,3 +69,37 @@ export function requestName(url: string): string {
   }
   return name === "" ? "wsdl" : name;
 }
+
+export type HeaderPair = { name: string; value: string };
+
+export function applyCustomHeaders(
+  raw: string,
+  managedNames: string[],
+  active: HeaderPair[],
+): string {
+  const managed = new Set(
+    [...managedNames, ...active.map((h) => h.name)].map((n) =>
+      n.trim().toLowerCase(),
+    ),
+  );
+  const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+  const separator = /\r?\n\r?\n/.exec(raw);
+  const head = separator !== null ? raw.substring(0, separator.index) : raw;
+  const body = separator !== null ? raw.substring(separator.index) : eol + eol;
+  const lines = head.split(/\r?\n/);
+  const requestLine = lines.shift() ?? "";
+  const kept = lines.filter((line) => {
+    const colon = line.indexOf(":");
+    return (
+      colon < 0 || !managed.has(line.substring(0, colon).trim().toLowerCase())
+    );
+  });
+  const added = active.map((h) => `${h.name.trim()}: ${h.value}`);
+  const lengthIndex = kept.findIndex((l) => /^content-length\s*:/i.test(l));
+  if (lengthIndex >= 0) {
+    kept.splice(lengthIndex, 0, ...added);
+  } else {
+    kept.push(...added);
+  }
+  return [requestLine, ...kept].join(eol) + body;
+}
