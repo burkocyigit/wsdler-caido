@@ -1,0 +1,9 @@
+Wsdler for Caido
+
+A Caido port of Wsdler (https://github.com/NetSPI/Wsdler) by NetSPI.
+
+The SOAP sample-message generation logic in packages/frontend/src/wsdl is a
+TypeScript re-implementation of SampleXmlUtil / SoapMessageBuilder from
+reficio soap-ws (https://github.com/reficio/soap-ws), which derive from
+soapUI and Apache XmlBeans. Those projects are licensed under the
+Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
